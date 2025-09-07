@@ -3,6 +3,10 @@ import Canvas, { CanvasHandles } from './components/Canvas';
 import ImageEditor, { ImageEditorHandles } from './components/ImageEditor';
 import { transformSketch, editImage } from './services/geminiService';
 
+// Set to true to show the API key input field. When false, the app will use
+// the API key from the environment variable (process.env.API_KEY).
+const SHOW_API_KEY_INPUT = true;
+
 const STYLE_OPTIONS = ["Photorealistic", "Illustration", "Cartoon", "Custom"];
 const CUSTOM_STYLE_KEY = "Custom";
 
@@ -31,7 +35,6 @@ function App() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -44,17 +47,28 @@ function App() {
   const [imageHistoryPointer, setImageHistoryPointer] = useState(-1);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('Error');
   const [modalMessage, setModalMessage] = useState('');
 
   const canvasRef = useRef<CanvasHandles>(null);
   const imageEditorRef = useRef<ImageEditorHandles>(null);
   
   useEffect(() => {
-    const storedApiKey = localStorage.getItem('geminiApiKey');
-    if (storedApiKey) {
-        setApiKey(storedApiKey);
+    if (SHOW_API_KEY_INPUT) {
+      const storedApiKey = localStorage.getItem('geminiApiKey');
+      if (storedApiKey) {
+          setApiKey(storedApiKey);
+      }
+    } else {
+      setApiKey(process.env.API_KEY || '');
     }
   }, []);
+  
+  const showErrorModal = (title: string, message: string) => {
+    setModalTitle(title);
+    setModalMessage(message);
+    setIsModalOpen(true);
+  };
   
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newKey = e.target.value;
@@ -63,14 +77,22 @@ function App() {
   }
 
   const handleApiError = (e: unknown) => {
-    if (e instanceof Error && e.message === 'Invalid API Key') {
-      setModalMessage('Your Gemini API Key is invalid. Please check it and try again. The incorrect key has been cleared.');
-      setIsModalOpen(true);
-      setApiKey('');
-      localStorage.removeItem('geminiApiKey');
-    } else {
-      setError(e instanceof Error ? e.message : 'An unknown error occurred.');
+    let errorMessage = 'An unknown error occurred.';
+    let errorTitle = 'Generation Failed';
+
+    if (e instanceof Error) {
+      errorMessage = e.message;
+      if (e.message === 'Invalid API Key') {
+        errorTitle = 'API Key Error';
+        errorMessage = 'Your Gemini API Key is invalid. Please check it and try again.';
+        if (SHOW_API_KEY_INPUT) {
+          errorMessage += ' The incorrect key has been cleared.';
+          setApiKey('');
+          localStorage.removeItem('geminiApiKey');
+        }
+      }
     }
+    showErrorModal(errorTitle, errorMessage);
   };
 
   const handleHistoryChange = useCallback((undo: boolean, redo: boolean) => {
@@ -85,27 +107,26 @@ function App() {
 
   const handleGenerateClick = async () => {
     if (!apiKey) {
-      setError('Please enter your Gemini API Key above.');
+      showErrorModal('API Key Missing', SHOW_API_KEY_INPUT ? 'Please enter your Gemini API Key above.' : 'Gemini API Key is not configured.');
       return;
     }
     if (canvasRef.current?.isEmpty()) {
-      setError('Please draw a sketch before generating an image.');
+      showErrorModal('Input Error', 'Please draw a sketch before generating an image.');
       return;
     }
     const imageDataUrl = canvasRef.current?.getImageDataUrl();
     if (!imageDataUrl) {
-      setError('Could not get sketch data.');
+      showErrorModal('Error', 'Could not get sketch data.');
       return;
     }
 
     const stylePrompt = selectedStyle === CUSTOM_STYLE_KEY ? customStyle : selectedStyle;
     if (!stylePrompt) {
-      setError('Please select or enter an image style.');
+      showErrorModal('Input Error', 'Please select or enter an image style.');
       return;
     }
 
     setIsLoading(true);
-    setError(null);
     setGeneratedImage(null);
     setImageHistory([]);
     setImageHistoryPointer(-1);
@@ -124,26 +145,25 @@ function App() {
   
   const handleEditClick = async () => {
     if (!apiKey) {
-      setError('Please enter your Gemini API Key above.');
+      showErrorModal('API Key Missing', SHOW_API_KEY_INPUT ? 'Please enter your Gemini API Key above.' : 'Gemini API Key is not configured.');
       return;
     }
     if (!imageEditorRef.current) {
-        setError('Image editor is not available.');
+        showErrorModal('Error', 'Image editor is not available.');
         return;
     }
     if (!inpaintingPrompt) {
-        setError('Please enter a description for the edit.');
+        showErrorModal('Input Error', 'Please enter a description for the edit.');
         return;
     }
     
     const editedImageDataUrl = imageEditorRef.current.getEditedImageDataUrl();
     if (!editedImageDataUrl) {
-        setError('Could not get edited image data.');
+        showErrorModal('Error', 'Could not get edited image data.');
         return;
     }
 
     setIsEditing(true);
-    setError(null);
 
     try {
         const resultImageUrl = await editImage(apiKey, editedImageDataUrl, inpaintingPrompt);
@@ -197,7 +217,7 @@ function App() {
             className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-center border border-gray-700"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-xl font-bold text-red-400 mb-4">API Key Error</h3>
+            <h3 className="text-xl font-bold text-red-400 mb-4">{modalTitle}</h3>
             <p className="text-gray-300 mb-6">{modalMessage}</p>
             <button
               onClick={() => setIsModalOpen(false)}
@@ -218,28 +238,30 @@ function App() {
         </p>
       </header>
 
-      <div className="w-full max-w-6xl mb-8 p-6 bg-gray-800 rounded-xl shadow-2xl">
-        <label htmlFor="apiKey" className="block text-lg font-semibold mb-2 text-gray-300">Gemini API Key</label>
-        <input 
-            id="apiKey"
-            type="password"
-            value={apiKey}
-            onChange={handleApiKeyChange}
-            placeholder="Enter your API key here"
-            className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-purple-500 focus:outline-none"
-        />
-        <p className="text-sm text-gray-400 mt-2">
-            Don't have an API key?{' '}
-            <a 
-                href="https://aistudio.google.com/apikey" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-purple-400 hover:underline"
-            >
-                Get one from Google AI Studio.
-            </a>
-        </p>
-      </div>
+      {SHOW_API_KEY_INPUT && (
+        <div className="w-full max-w-6xl mb-8 p-6 bg-gray-800 rounded-xl shadow-2xl">
+          <label htmlFor="apiKey" className="block text-lg font-semibold mb-2 text-gray-300">Gemini API Key</label>
+          <input 
+              id="apiKey"
+              type="password"
+              value={apiKey}
+              onChange={handleApiKeyChange}
+              placeholder="Enter your API key here"
+              className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-purple-500 focus:outline-none"
+          />
+          <p className="text-sm text-gray-400 mt-2">
+              Don't have an API key?{' '}
+              <a 
+                  href="https://aistudio.google.com/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-purple-400 hover:underline"
+              >
+                  Get one from Google AI Studio.
+              </a>
+          </p>
+        </div>
+      )}
 
       <main className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="flex flex-col gap-6 p-6 bg-gray-800 rounded-xl shadow-2xl">
@@ -315,14 +337,13 @@ function App() {
                 <p className="mt-4 text-gray-400">The AI is painting...</p>
               </div>
             )}
-            {error && <p className="text-red-400 text-center p-4">{error}</p>}
-            {!isLoading && !error && generatedImage && (
+            {!isLoading && !generatedImage && (
+              <p className="text-gray-500">Your generated image will appear here.</p>
+            )}
+             {!isLoading && generatedImage && (
               <div className="w-full h-full flex flex-col items-center justify-center">
                 <ImageEditor ref={imageEditorRef} imageUrl={generatedImage} onHistoryChange={handleEditorHistoryChange} />
               </div>
-            )}
-            {!isLoading && !error && !generatedImage && (
-              <p className="text-gray-500">Your generated image will appear here.</p>
             )}
           </div>
           
