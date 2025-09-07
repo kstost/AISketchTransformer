@@ -1,12 +1,5 @@
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
 
-/**
- * Configuration flag to determine which API key to use.
- * - `false` (default): Uses the API key from the environment variable (`process.env.API_KEY`).
- * - `true`: Uses the API key provided by the user through the UI.
- */
-export const USE_USER_PROVIDED_API_KEY = true;
-
 const dataUrlToBase64 = (dataUrl: string): string => {
   if (!dataUrl.includes(',')) {
     throw new Error('Invalid data URL format');
@@ -48,19 +41,10 @@ const handleApiResponse = (response: GenerateContentResponse): string => {
     throw new Error("The AI did not return an image. Please try a different sketch or prompt.");
 };
 
-const sendRequestToGemini = async (base64ImageDataUrl: string, textPrompt: string, userApiKey?: string): Promise<string> => {
-    const getApiKey = (): string | undefined => {
-        if (USE_USER_PROVIDED_API_KEY) {
-            return userApiKey;
-        }
-        return process.env.API_KEY;
-    };
-    const apiKey = getApiKey();
-
+const sendRequestToGemini = async (apiKey: string, base64ImageDataUrl: string, textPrompt: string): Promise<string> => {
     if (!apiKey) {
-      throw new Error("The application is not configured with an API key. Please enter one.");
+      throw new Error("API Key is missing.");
     }
-
     const ai = new GoogleGenAI({ apiKey });
     const model = 'gemini-2.5-flash-image-preview';
     const base64Data = dataUrlToBase64(base64ImageDataUrl);
@@ -93,7 +77,7 @@ const sendRequestToGemini = async (base64ImageDataUrl: string, textPrompt: strin
         if (error instanceof Error) {
             // This is a common error message format for invalid keys from the SDK
             if (error.message.includes('API key not valid')) {
-                throw new Error('The provided API Key is invalid.');
+                throw new Error('Invalid API Key');
             }
             if (error.message.startsWith("Request was blocked") || error.message.startsWith("The AI responded with text")) {
                 throw error;
@@ -106,23 +90,20 @@ const sendRequestToGemini = async (base64ImageDataUrl: string, textPrompt: strin
 
 
 export const transformSketch = async (
+  apiKey: string,
   base64ImageDataUrl: string,
   stylePrompt: string,
-  userApiKey?: string,
 ): Promise<string> => {
     const textPrompt = `Transform this sketch into a finished image in the style of '${stylePrompt}'.`;
-    return sendRequestToGemini(base64ImageDataUrl, textPrompt, userApiKey);
+    return sendRequestToGemini(apiKey, base64ImageDataUrl, textPrompt);
 };
 
 
 export const editImage = async (
+  apiKey: string,
   base64ImageDataUrl: string, // Image with erased parts
   editPrompt: string,
-  userApiKey?: string,
 ): Promise<string> => {
-    const instructionPart = editPrompt
-      ? ` by following these instructions: '${editPrompt}'.`
-      : '.';
-    const textPrompt = `Modify this image${instructionPart} Fill in any erased (transparent) areas and incorporate the new sketch lines drawn in magenta. The magenta lines indicate desired additions or changes. It is crucial that you analyze the original image's artistic style, lighting, color palette, and texture, and then render the additions from the magenta sketch to seamlessly match that existing context. Blend all changes naturally with the rest of the original image.`;
-    return sendRequestToGemini(base64ImageDataUrl, textPrompt, userApiKey);
+    const textPrompt = `Fill the erased (transparent) area naturally according to the following description: '${editPrompt}'. Keep the rest of the image as it is.`;
+    return sendRequestToGemini(apiKey, base64ImageDataUrl, textPrompt);
 };
