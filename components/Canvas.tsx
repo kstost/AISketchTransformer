@@ -192,6 +192,7 @@ const Canvas = forwardRef<CanvasHandles, CanvasProps>(({ onHistoryChange }, ref)
       onTouchMove={draw}
       onTouchEnd={stopDrawing}
       className="w-full h-full rounded-lg shadow-lg cursor-crosshair bg-gray-800"
+      style={{ touchAction: 'none' }}
     />
   );
 });

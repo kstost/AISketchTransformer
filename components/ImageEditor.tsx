@@ -9,9 +9,10 @@ export interface ImageEditorHandles {
 interface ImageEditorProps {
   imageUrl: string;
   onHistoryChange: (canUndo: boolean, canRedo: boolean) => void;
+  isEditing: boolean;
 }
 
-const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl, onHistoryChange }, ref) => {
+const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl, onHistoryChange, isEditing }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [context, setContext] = useState<CanvasRenderingContext2D | null>(null);
   const [isErasing, setIsErasing] = useState(false);
@@ -147,29 +148,36 @@ const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl
   }));
 
   return (
-    <canvas
-      ref={canvasRef}
-      onMouseDown={startErasing}
-      onMouseMove={erase}
-      onMouseUp={stopErasing}
-      onMouseLeave={stopErasing}
-      onTouchStart={startErasing}
-      onTouchMove={erase}
-      onTouchEnd={stopErasing}
-      className="max-w-full max-h-full object-contain rounded-lg shadow-lg cursor-crosshair"
-      style={{ 
-          touchAction: 'none',
-          backgroundImage: `
-            linear-gradient(45deg, #808080 25%, transparent 25%), 
-            linear-gradient(-45deg, #808080 25%, transparent 25%), 
-            linear-gradient(45deg, transparent 75%, #808080 75%), 
-            linear-gradient(-45deg, transparent 75%, #808080 75%)
-          `,
-          backgroundSize: '20px 20px',
-          backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
-          backgroundColor: '#a9a9a9'
-      }}
-    />
+    <div className="relative w-full h-full flex items-center justify-center">
+        <canvas
+            ref={canvasRef}
+            onMouseDown={startErasing}
+            onMouseMove={erase}
+            onMouseUp={stopErasing}
+            onMouseLeave={stopErasing}
+            onTouchStart={startErasing}
+            onTouchMove={erase}
+            onTouchEnd={stopErasing}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-lg cursor-crosshair"
+            style={{ 
+                touchAction: 'none',
+                backgroundImage: `
+                    linear-gradient(45deg, #808080 25%, transparent 25%), 
+                    linear-gradient(-45deg, #808080 25%, transparent 25%), 
+                    linear-gradient(45deg, transparent 75%, #808080 75%), 
+                    linear-gradient(-45deg, transparent 75%, #808080 75%)
+                `,
+                backgroundSize: '20px 20px',
+                backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+                backgroundColor: '#a9a9a9'
+            }}
+        />
+        {isEditing && (
+            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
+                <div className="w-12 h-12 border-4 border-t-purple-500 border-gray-600 rounded-full animate-spin"></div>
+            </div>
+        )}
+    </div>
   );
 });
 

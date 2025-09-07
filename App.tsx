@@ -5,7 +5,7 @@ import { transformSketch, editImage } from './services/geminiService';
 
 // Set to true to show the API key input field. When false, the app will use
 // the API key from the environment variable (process.env.API_KEY).
-const SHOW_API_KEY_INPUT = true;
+const SHOW_API_KEY_INPUT = !false;
 
 const STYLE_OPTIONS = ["Photorealistic", "Illustration", "Cartoon", "Custom"];
 const CUSTOM_STYLE_KEY = "Custom";
@@ -26,6 +26,12 @@ const RedoIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
   </svg>
+);
+
+const ClipboardIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v3.042m-7.416 0v3.042c0 .212.03.418.084.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+    </svg>
 );
 
 function App() {
@@ -49,6 +55,7 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('Error');
   const [modalMessage, setModalMessage] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const canvasRef = useRef<CanvasHandles>(null);
   const imageEditorRef = useRef<ImageEditorHandles>(null);
@@ -205,8 +212,39 @@ function App() {
       }
   };
 
+  const handleCopyImage = () => {
+    if (!generatedImage) return;
+
+    // Use a promise-based approach with ClipboardItem to ensure the clipboard
+    // write is initiated synchronously within the user gesture event handler.
+    // This avoids issues in some browsers where async operations before the
+    // write call can invalidate the user gesture context.
+    const blobPromise = fetch(generatedImage).then(res => res.blob());
+    const mimeType = generatedImage.match(/data:(.*);/)?.[1] ?? 'image/png';
+
+    navigator.clipboard.write([
+        new ClipboardItem({
+            [mimeType]: blobPromise
+        })
+    ]).then(() => {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+    }).catch(error => {
+        console.error('Failed to copy image:', error);
+        let message = 'Could not copy the image to the clipboard.';
+        if (error instanceof Error) {
+            if (error.name === 'NotAllowedError') {
+                message = 'Clipboard permission was denied. Please allow clipboard access in your browser settings.';
+            } else {
+                message = `An error occurred: ${error.message}`;
+            }
+        }
+        showErrorModal('Copy Failed', message);
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center p-4 sm:p-6 md:p-8">
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center p-4 sm:p-6 md:p-8 select-none">
       
       {isModalOpen && (
         <div 
@@ -217,8 +255,8 @@ function App() {
             className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-center border border-gray-700"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-xl font-bold text-red-400 mb-4">{modalTitle}</h3>
-            <p className="text-gray-300 mb-6">{modalMessage}</p>
+            <h3 className="text-xl font-bold text-red-400 mb-4 select-text">{modalTitle}</h3>
+            <p className="text-gray-300 mb-6 select-text">{modalMessage}</p>
             <button
               onClick={() => setIsModalOpen(false)}
               className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md transition-transform transform hover:scale-105"
@@ -342,7 +380,12 @@ function App() {
             )}
              {!isLoading && generatedImage && (
               <div className="w-full h-full flex flex-col items-center justify-center">
-                <ImageEditor ref={imageEditorRef} imageUrl={generatedImage} onHistoryChange={handleEditorHistoryChange} />
+                <ImageEditor 
+                  ref={imageEditorRef} 
+                  imageUrl={generatedImage} 
+                  onHistoryChange={handleEditorHistoryChange}
+                  isEditing={isEditing}
+                />
               </div>
             )}
           </div>
@@ -369,6 +412,19 @@ function App() {
                         aria-label="Redo Edit"
                     >
                         <RedoIcon className="w-6 h-6" />
+                    </button>
+                    <button
+                        onClick={handleCopyImage}
+                        disabled={isEditing || copySuccess}
+                        className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors relative"
+                        aria-label="Copy Image"
+                    >
+                        <ClipboardIcon className="w-6 h-6" />
+                        {copySuccess && (
+                            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-md shadow-lg">
+                                Copied!
+                            </span>
+                        )}
                     </button>
                 </div>
                 <input
