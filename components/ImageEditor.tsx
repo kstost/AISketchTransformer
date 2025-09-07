@@ -157,7 +157,18 @@ const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl
       onTouchMove={erase}
       onTouchEnd={stopErasing}
       className="max-w-full max-h-full object-contain rounded-lg shadow-lg cursor-crosshair"
-      style={{ touchAction: 'none' }}
+      style={{ 
+          touchAction: 'none',
+          backgroundImage: `
+            linear-gradient(45deg, #808080 25%, transparent 25%), 
+            linear-gradient(-45deg, #808080 25%, transparent 25%), 
+            linear-gradient(45deg, transparent 75%, #808080 75%), 
+            linear-gradient(-45deg, transparent 75%, #808080 75%)
+          `,
+          backgroundSize: '20px 20px',
+          backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+          backgroundColor: '#a9a9a9'
+      }}
     />
   );
 });
