@@ -54,20 +54,11 @@ const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl
   // Initialize canvas and draw image
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !image) return;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !image || !ctx) return;
 
     canvas.width = image.width;
     canvas.height = image.height;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Set canvas size for display, maintaining aspect ratio
-    const aspectRatio = image.width / image.height;
-    const parentWidth = canvas.parentElement?.clientWidth || image.width;
-    const displayWidth = Math.min(image.width, parentWidth);
-    canvas.style.width = `${displayWidth}px`;
-    canvas.style.height = `${displayWidth / aspectRatio}px`;
 
     ctx.drawImage(image, 0, 0, image.width, image.height);
     setContext(ctx);
@@ -82,6 +73,24 @@ const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl
     }, 0);
 
   }, [image, saveState]);
+
+  // Handle canvas display resizing
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !image) return;
+
+    const handleResize = () => {
+        const aspectRatio = image.width / image.height;
+        const parentWidth = canvas.parentElement?.clientWidth || image.width;
+        const displayWidth = Math.min(image.width, parentWidth);
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${displayWidth / aspectRatio}px`;
+    };
+
+    handleResize(); // Initial sizing
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [image]);
 
   const getCoords = (e: React.MouseEvent | React.TouchEvent): { x: number; y: number } | null => {
     if (!canvasRef.current || !context) return null;
