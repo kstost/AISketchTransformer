@@ -34,10 +34,23 @@ const ClipboardIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
+const PhotoIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+  </svg>
+);
+
+const XCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
 function App() {
   const [apiKey, setApiKey] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<string>(STYLE_OPTIONS[0]);
   const [customStyle, setCustomStyle] = useState('');
+  const [customStyleImage, setCustomStyleImage] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -128,8 +141,8 @@ function App() {
     }
 
     const stylePrompt = selectedStyle === CUSTOM_STYLE_KEY ? customStyle : selectedStyle;
-    if (!stylePrompt) {
-      showErrorModal('Input Error', 'Please select or enter an image style.');
+    if (!stylePrompt && !customStyleImage) {
+      showErrorModal('Input Error', 'Please enter a description of the style or attach an image file as a reference for the style.');
       return;
     }
 
@@ -139,7 +152,7 @@ function App() {
     setImageHistoryPointer(-1);
 
     try {
-      const resultImageUrl = await transformSketch(apiKey, imageDataUrl, stylePrompt);
+      const resultImageUrl = await transformSketch(apiKey, imageDataUrl, stylePrompt, customStyleImage);
       setGeneratedImage(resultImageUrl);
       setImageHistory([resultImageUrl]);
       setImageHistoryPointer(0);
@@ -215,10 +228,6 @@ function App() {
   const handleCopyImage = () => {
     if (!generatedImage) return;
 
-    // Use a promise-based approach with ClipboardItem to ensure the clipboard
-    // write is initiated synchronously within the user gesture event handler.
-    // This avoids issues in some browsers where async operations before the
-    // write call can invalidate the user gesture context.
     const blobPromise = fetch(generatedImage).then(res => res.blob());
     const mimeType = generatedImage.match(/data:(.*);/)?.[1] ?? 'image/png';
 
@@ -241,6 +250,25 @@ function App() {
         }
         showErrorModal('Copy Failed', message);
     });
+  };
+
+  const handleStyleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCustomStyleImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleStyleSelection = (style: string) => {
+    setSelectedStyle(style);
+    if (style !== CUSTOM_STYLE_KEY) {
+      setCustomStyleImage(null);
+    }
   };
 
   return (
@@ -336,7 +364,7 @@ function App() {
               {STYLE_OPTIONS.map((style) => (
                 <button
                   key={style}
-                  onClick={() => setSelectedStyle(style)}
+                  onClick={() => handleStyleSelection(style)}
                   className={`px-3 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                     selectedStyle === style
                       ? 'bg-purple-600 text-white shadow-lg ring-2 ring-purple-400'
@@ -348,13 +376,44 @@ function App() {
               ))}
             </div>
             {selectedStyle === CUSTOM_STYLE_KEY && (
-              <input
-                type="text"
-                value={customStyle}
-                onChange={(e) => setCustomStyle(e.target.value)}
-                placeholder="e.g., 'A watercolor landscape'"
-                className="w-full mt-3 p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-purple-500 focus:outline-none"
-              />
+              <div className="mt-3 space-y-3">
+                <input
+                  type="text"
+                  value={customStyle}
+                  onChange={(e) => setCustomStyle(e.target.value)}
+                  placeholder="Describe your custom style..."
+                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                />
+                 <div className="p-3 bg-gray-700/50 rounded-lg">
+                  <h4 className="text-sm font-semibold text-gray-400 mb-2">Optional: Upload Style Image</h4>
+                  {!customStyleImage ? (
+                    <label htmlFor="style-image-upload" className="flex items-center justify-center w-full p-4 border-2 border-dashed border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors">
+                      <div className="text-center">
+                        <PhotoIcon className="mx-auto h-8 w-8 text-gray-500" />
+                        <p className="mt-1 text-sm text-gray-400">Click to upload a reference image</p>
+                      </div>
+                      <input 
+                        id="style-image-upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleStyleImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  ) : (
+                    <div className="relative w-full aspect-video bg-gray-900/50 rounded-md">
+                      <img src={customStyleImage} alt="Style reference" className="rounded-md object-contain w-full h-full" />
+                      <button
+                        onClick={() => setCustomStyleImage(null)}
+                        className="absolute top-1 right-1 bg-gray-900/70 text-white rounded-full p-1 hover:bg-red-600 transition-all"
+                        aria-label="Remove style image"
+                      >
+                        <XCircleIcon className="w-6 h-6" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
           <button
