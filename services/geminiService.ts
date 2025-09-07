@@ -5,7 +5,7 @@ import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
  * - `false` (default): Uses the API key from the environment variable (`process.env.API_KEY`).
  * - `true`: Uses the API key provided by the user through the UI.
  */
-export const USE_USER_PROVIDED_API_KEY = false;
+export const USE_USER_PROVIDED_API_KEY = true;
 
 const dataUrlToBase64 = (dataUrl: string): string => {
   if (!dataUrl.includes(',')) {
