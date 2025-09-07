@@ -1,0 +1,5 @@
+{
+  "name": "AI Sketch Transformer",
+  "description": "Draw a simple sketch on the canvas and use the Gemini API to transform it into a beautiful image in various styles like photorealistic, illustration, or cartoon.",
+  "requestFramePermissions": []
+}
