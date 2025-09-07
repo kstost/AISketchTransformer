@@ -1,3 +1,9 @@
+rm -rf ~/Downloads/AISK
+mkdir ~/Downloads/AISK
+cd ~/Downloads/AISK
+
+mv "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD" ./ai-sketch-transformer.zip
+
 unzip ai-sketch-transformer.zip 
 git clone https://github.com/kstost/AISketchTransformer
 mv AISketchTransformer/.git .
