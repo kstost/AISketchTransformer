@@ -120,6 +120,9 @@ export const editImage = async (
   editPrompt: string,
   userApiKey?: string,
 ): Promise<string> => {
-    const textPrompt = `Fill the erased (transparent) area naturally according to the following description: '${editPrompt}'. Keep the rest of the image as it is.`;
+    const instructionPart = editPrompt
+      ? ` by following these instructions: '${editPrompt}'.`
+      : '.';
+    const textPrompt = `Modify this image${instructionPart} Fill in any erased (transparent) areas and incorporate the new sketch lines drawn in magenta. The magenta lines indicate desired additions or changes. It is crucial that you analyze the original image's artistic style, lighting, color palette, and texture, and then render the additions from the magenta sketch to seamlessly match that existing context. Blend all changes naturally with the rest of the original image.`;
     return sendRequestToGemini(base64ImageDataUrl, textPrompt, userApiKey);
 };

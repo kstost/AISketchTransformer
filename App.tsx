@@ -25,6 +25,18 @@ const RedoIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+const PaintBrushIcon = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M18.608 3.422a2.33 2.33 0 013.295 0 2.33 2.33 0 010 3.295L8.52 20.099a4.25 4.25 0 01-6.009-6.01l16.097-10.667zM7.058 15.488a1.75 1.75 0 10-2.474-2.474 1.75 1.75 0 002.474 2.474z" />
+    </svg>
+);
+
+const EraserIcon = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M19.78 4.22a2.33 2.33 0 00-3.295 0l-7.92 7.92a.5.5 0 000 .707l3.96 3.96a.5.5 0 00.707 0l7.92-7.92a2.33 2.33 0 000-3.295L19.78 4.22zM4 19.5a1.5 1.5 0 001.5 1.5H18v-3H5.5A1.5 1.5 0 004 16.5v3z" />
+    </svg>
+);
+
 const ApiKeyErrorModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void; }) => {
     if (!isOpen) return null;
     return (
@@ -45,6 +57,26 @@ const ApiKeyErrorModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
     );
 };
 
+const ErrorModal = ({ isOpen, onClose, message }: { isOpen: boolean; onClose: () => void; message: string | null; }) => {
+    if (!isOpen || !message) return null;
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" aria-modal="true" role="dialog">
+            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-center">
+                <h3 className="text-2xl font-bold text-yellow-400 mb-4">Warning</h3>
+                <p className="text-gray-300 mb-6">
+                    {message}
+                </p>
+                <button
+                    onClick={onClose}
+                    className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md transition-transform transform hover:scale-105"
+                >
+                    Close
+                </button>
+            </div>
+        </div>
+    );
+};
+
 
 function App() {
   const [selectedStyle, setSelectedStyle] = useState<string>(STYLE_OPTIONS[0]);
@@ -52,6 +84,7 @@ function App() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [editorMode, setEditorMode] = useState<'draw' | 'erase'>('erase');
   const [error, setError] = useState<string | null>(null);
   
   const [canUndo, setCanUndo] = useState(false);
@@ -86,11 +119,12 @@ function App() {
 
   const handleApiError = (e: unknown) => {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-    setError(errorMessage);
     if (errorMessage.includes('API Key is invalid') || errorMessage.includes('API key not valid')) {
         localStorage.removeItem(API_KEY_STORAGE_KEY);
         setUserApiKey('');
         setIsInvalidKeyModalOpen(true);
+    } else {
+        setError(errorMessage);
     }
   };
 
@@ -164,6 +198,7 @@ function App() {
       setGeneratedImage(resultImageUrl);
       setImageHistory([resultImageUrl]);
       setImageHistoryPointer(0);
+      setEditorMode('erase');
     } catch (e) {
       handleApiError(e);
     } finally {
@@ -176,11 +211,7 @@ function App() {
         setError('Image editor is not available.');
         return;
     }
-    if (!inpaintingPrompt) {
-        setError('Please enter a description for the edit.');
-        return;
-    }
-    
+
     const editedImageDataUrl = imageEditorRef.current.getEditedImageDataUrl();
     if (!editedImageDataUrl) {
         setError('Could not get edited image data.');
@@ -233,6 +264,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center p-4 sm:p-6 md:p-8">
       <ApiKeyErrorModal isOpen={isInvalidKeyModalOpen} onClose={() => setIsInvalidKeyModalOpen(false)} />
+      <ErrorModal isOpen={error !== null} onClose={() => setError(null)} message={error} />
       <header className="w-full max-w-6xl text-center mb-6 md:mb-10">
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
           AI Sketch Transformer
@@ -340,10 +372,9 @@ function App() {
                 <p className="mt-4 text-gray-400">The AI is painting...</p>
               </div>
             )}
-            {error && <p className="text-red-400 text-center p-4">{error}</p>}
             {!isLoading && !error && generatedImage && (
               <div className="relative w-full h-full flex flex-col items-center justify-center">
-                <ImageEditor ref={imageEditorRef} imageUrl={generatedImage} onHistoryChange={handleEditorHistoryChange} />
+                <ImageEditor ref={imageEditorRef} imageUrl={generatedImage} onHistoryChange={handleEditorHistoryChange} mode={editorMode} />
                 {isEditing && (
                     <div className="absolute inset-0 bg-gray-900/80 flex flex-col items-center justify-center rounded-lg transition-opacity duration-300">
                         <div className="w-12 h-12 border-4 border-t-teal-500 border-gray-600 rounded-full animate-spin"></div>
@@ -361,7 +392,7 @@ function App() {
             <div className='flex flex-col gap-3'>
                 <h3 className="text-lg font-semibold text-gray-300">Edit Image</h3>
                 <p className="text-sm text-gray-400">
-                    Erase the part of the image you want to change, then describe the changes below.
+                    Use Erase or Draw mode, then describe the changes below (optional).
                 </p>
                  <div className="flex justify-center items-center gap-2">
                     <button
@@ -379,6 +410,23 @@ function App() {
                         aria-label="Redo Edit"
                     >
                         <RedoIcon className="w-6 h-6" />
+                    </button>
+                    <div className="w-px h-6 bg-gray-600 mx-2"></div>
+                    <button
+                      onClick={() => setEditorMode('draw')}
+                      className={`p-2 rounded-full transition-colors ${editorMode === 'draw' ? 'bg-purple-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+                      aria-label="Draw mode"
+                      disabled={isEditing}
+                    >
+                      <PaintBrushIcon className="w-6 h-6" />
+                    </button>
+                    <button
+                      onClick={() => setEditorMode('erase')}
+                      className={`p-2 rounded-full transition-colors ${editorMode === 'erase' ? 'bg-purple-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+                      aria-label="Erase mode"
+                      disabled={isEditing}
+                    >
+                      <EraserIcon className="w-6 h-6" />
                     </button>
                 </div>
                 <input

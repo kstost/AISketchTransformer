@@ -9,12 +9,13 @@ export interface ImageEditorHandles {
 interface ImageEditorProps {
   imageUrl: string;
   onHistoryChange: (canUndo: boolean, canRedo: boolean) => void;
+  mode: 'draw' | 'erase';
 }
 
-const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl, onHistoryChange }, ref) => {
+const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl, onHistoryChange, mode }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [context, setContext] = useState<CanvasRenderingContext2D | null>(null);
-  const [isErasing, setIsErasing] = useState(false);
+  const [isInteracting, setIsInteracting] = useState(false);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
 
   const history = useRef<ImageData[]>([]);
@@ -81,13 +82,28 @@ const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl
 
     const handleResize = () => {
         const aspectRatio = image.width / image.height;
-        const parentWidth = canvas.parentElement?.clientWidth || image.width;
-        const displayWidth = Math.min(image.width, parentWidth);
+        const parent = canvas.parentElement?.parentElement; // The container div of the mode selector and canvas
+        if (!parent) return;
+        
+        const parentWidth = parent.clientWidth;
+        const parentHeight = parent.clientHeight;
+        const parentAspect = parentWidth / parentHeight;
+
+        let displayWidth, displayHeight;
+
+        if (aspectRatio > parentAspect) {
+            displayWidth = parentWidth;
+            displayHeight = parentWidth / aspectRatio;
+        } else {
+            displayHeight = parentHeight;
+            displayWidth = parentHeight * aspectRatio;
+        }
+
         canvas.style.width = `${displayWidth}px`;
-        canvas.style.height = `${displayWidth / aspectRatio}px`;
+        canvas.style.height = `${displayHeight}px`;
     };
 
-    handleResize(); // Initial sizing
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [image]);
@@ -99,7 +115,6 @@ const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
-    // Translate coordinates from display size to actual canvas resolution
     const scaleX = canvasRef.current.width / rect.width;
     const scaleY = canvasRef.current.height / rect.height;
 
@@ -109,31 +124,51 @@ const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl
     };
   };
 
-  const startErasing = (e: React.MouseEvent | React.TouchEvent) => {
+  const startInteraction = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
-    setIsErasing(true);
+    if (!context || !canvasRef.current) return;
+    setIsInteracting(true);
     const coords = getCoords(e);
-    if (coords) {
-        erase(e); // Start erasing immediately on click/touch
+    if (!coords) return;
+
+    if (mode === 'draw') {
+        context.globalCompositeOperation = 'source-over';
+        const scale = canvasRef.current.width / canvasRef.current.getBoundingClientRect().width;
+        context.lineWidth = 5 * scale;
+        context.strokeStyle = '#FF00FF'; // Magenta for high visibility
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.beginPath();
+        context.moveTo(coords.x, coords.y);
+    }
+    // Erase on first click/touch
+    handleInteraction(e);
+  };
+
+  const handleInteraction = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isInteracting || !context || !canvasRef.current) return;
+    e.preventDefault();
+    const coords = getCoords(e);
+    if (!coords) return;
+
+    if (mode === 'draw') {
+        context.lineTo(coords.x, coords.y);
+        context.stroke();
+    } else { // 'erase'
+        context.globalCompositeOperation = 'destination-out';
+        context.beginPath();
+        const scale = canvasRef.current.width / canvasRef.current.getBoundingClientRect().width;
+        context.arc(coords.x, coords.y, 20 * scale, 0, Math.PI * 2, false);
+        context.fill();
     }
   };
 
-  const erase = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isErasing || !context) return;
-    e.preventDefault();
-    const coords = getCoords(e);
-    if (coords) {
-      context.globalCompositeOperation = 'destination-out';
-      context.beginPath();
-      context.arc(coords.x, coords.y, 40, 0, Math.PI * 2, false); // 40px radius brush (doubled)
-      context.fill();
+  const stopInteraction = () => {
+    if (!isInteracting || !context) return;
+    if (mode === 'draw') {
+        context.closePath();
     }
-  };
-
-  const stopErasing = () => {
-    if (!isErasing || !context) return;
-    context.globalCompositeOperation = 'source-over'; // Reset to default
-    setIsErasing(false);
+    setIsInteracting(false);
     saveState();
   };
 
@@ -156,29 +191,31 @@ const ImageEditor = forwardRef<ImageEditorHandles, ImageEditorProps>(({ imageUrl
   }));
 
   return (
-    <canvas
-      ref={canvasRef}
-      onMouseDown={startErasing}
-      onMouseMove={erase}
-      onMouseUp={stopErasing}
-      onMouseLeave={stopErasing}
-      onTouchStart={startErasing}
-      onTouchMove={erase}
-      onTouchEnd={stopErasing}
-      className="max-w-full max-h-full object-contain rounded-lg shadow-lg cursor-crosshair"
-      style={{ 
-          touchAction: 'none',
-          backgroundImage: `
-            linear-gradient(45deg, #808080 25%, transparent 25%), 
-            linear-gradient(-45deg, #808080 25%, transparent 25%), 
-            linear-gradient(45deg, transparent 75%, #808080 75%), 
-            linear-gradient(-45deg, transparent 75%, #808080 75%)
-          `,
-          backgroundSize: '20px 20px',
-          backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
-          backgroundColor: '#a9a9a9'
-      }}
-    />
+    <div className='w-full h-full flex flex-col items-center justify-center'>
+      <canvas
+        ref={canvasRef}
+        onMouseDown={startInteraction}
+        onMouseMove={handleInteraction}
+        onMouseUp={stopInteraction}
+        onMouseLeave={stopInteraction}
+        onTouchStart={startInteraction}
+        onTouchMove={handleInteraction}
+        onTouchEnd={stopInteraction}
+        className="max-w-full max-h-full object-contain rounded-lg shadow-lg cursor-crosshair"
+        style={{ 
+            touchAction: 'none',
+            backgroundImage: `
+              linear-gradient(45deg, #808080 25%, transparent 25%), 
+              linear-gradient(-45deg, #808080 25%, transparent 25%), 
+              linear-gradient(45deg, transparent 75%, #808080 75%), 
+              linear-gradient(-45deg, transparent 75%, #808080 75%)
+            `,
+            backgroundSize: '20px 20px',
+            backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+            backgroundColor: '#a9a9a9'
+        }}
+      />
+    </div>
   );
 });
 
